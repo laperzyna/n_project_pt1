@@ -1,181 +1,160 @@
-#include <arpa/inet.h> // inet_addr()
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <netdb.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <strings.h> // bzero()
-#include <sys/socket.h>
-#include <unistd.h> // read(), write(), close()
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <arpa/inet.h>
 
-#define MAX 80
-#define PORT 8080
-#define SA struct sockaddr
-
-// json parser https://zserge.com/jsmn/
-
-// client sends low entropy (all zeros) to sever, then wait, and send High Entropy
-
-int openSocket(int sockfd, struct sockaddr_in servaddr){
-	// socket create and verification
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd == -1)
-	{
-		printf("socket creation failed...\n");
-		exit(0);
-	}
-	else
-		printf("Socket successfully created..\n");
-	bzero(&servaddr, sizeof(servaddr));
-	return sockfd;
-}
-
-int connectToServer(int sockfd, struct sockaddr_in servaddr)
-{
-
-	// socket create and verification
-	/*sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd == -1)
-	{
-		printf("socket creation failed...\n");
-		exit(0);
-	}
-	else
-		printf("Socket successfully created..\n");
-	bzero(&servaddr, sizeof(servaddr));*/
-
-	/*int reuse = 1;
-
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse)) < 0)
-	{
-		perror("SO_REUSEADDR failed");
-		return -1;
-	}*/
 /*
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, (const char *)&reuse, sizeof(reuse)) < 0)
-	{
-		perror("SO_REUSEPORT failed");
-		return -1;
-	}*/
+Client connects to server port, server listens to it's own port
+Once connected, client reads a file and sends 1024 byte packets
+to the server, then it closes the connection.
+The server, accepts messages and listens for the connection to be dropped
+, that is what tells the server we have finished sending the config file
 
-	// assign IP, PORT
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-	servaddr.sin_port = htons(PORT);
+TODO
+Client sends UDP packets, server receives
 
-	int isConnected = 0;
-	do
-	{
-		// try to connect to client
-		if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
-		{
-			printf("connection with the server on port %d failed...\n", PORT);
-			usleep(500 * 1000);
-		}
-		else
-		{
-			printf("connected to the server on port %d..\n", PORT);
-			isConnected = 1;
-		}
 
-	} while (isConnected == 0);
+*/
 
-	return sockfd;
-}
+#define SERVER_PORT 8756
+
+void sendFileToServer(char *filename, struct sockaddr_in s_addr, int connfd);
 
 void sendTCPMsg(int sockfd, char *msg)
 {
 
-	int msgSize = sizeof(msg);
-	char buff[msgSize];
-	strcpy(buff, msg);
-	write(sockfd, buff, sizeof(buff));
-	printf("Sent %s on %d\n", buff, PORT);
-	usleep(100 * 1000);
-}
-//https://www.geeksforgeeks.org/udp-server-client-implementation-c/
-void sendUDP(int sockfd, char * msg){
-	int msgSize = sizeof(msg);
-	char buff[msgSize];
-	strcpy(buff, msg);
-
-	
-	printf("Sent %s on %d\n", buff, PORT);
-	usleep(100 * 1000);
+    int msgSize = sizeof(msg);
+    char buff[msgSize];
+    strcpy(buff, msg);
+    write(sockfd, buff, sizeof(buff));
+    printf("Sent %s on %d\n", buff, SERVER_PORT);
+    usleep(100 * 1000);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-	int sockfd, connfd;
-	struct sockaddr_in servaddr, cli;
+    // system("clear");
+    int sockfd = 0;
+    int bytesReceived = 0;
+    char recvBuff[1024];
+    memset(recvBuff, '0', sizeof(recvBuff));
+    struct sockaddr_in serv_addr;
 
-	// waits and tries to reconnect
-	openSocket(sockfd,servaddr);
-	sockfd = connectToServer(sockfd, servaddr);
-	sendTCPMsg(sockfd, "start");
-	sendTCPMsg(sockfd, "IP:127.0.0.1");
-	sendTCPMsg(sockfd, "SPUDP:8080");
-	sendTCPMsg(sockfd, "DPUDP:8081");
-	sendTCPMsg(sockfd, "end");
-	close(sockfd);
-	//connectToServer(sockfd, servaddr);
+    /* Create a socket first */
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        printf("\n Error : Could not create socket \n");
+        return 1;
+    }
 
-/*
-	//openSocket for UDP messaging
-	openSocket(sockfd,servaddr);
-	// Filling server information 
-    servaddr.sin_family = AF_INET; 
-    servaddr.sin_port = htons(PORT); 
-    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    /* Initialize sockaddr_in data structure */
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(SERVER_PORT); // port
+    char *ip = "127.0.0.1";
+    serv_addr.sin_addr.s_addr = inet_addr(ip);
+
+    /* Attempt a connection */
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        printf("\n Error : Connect Failed \n");
+        return 1;
+    }
+
+    printf("Connected to ip: %s : %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
+    /*sendTCPMsg(sockfd, "start");
+    sendTCPMsg(sockfd, "IP:127.0.0.1");
+    sendTCPMsg(sockfd, "SPUDP:8080");
+    sendTCPMsg(sockfd, "DPUDP:8081");
+    sendTCPMsg(sockfd, "end");*/
+    sendFileToServer("config.json", serv_addr, sockfd);
+    // after the file has been sent close the connection
+    close(sockfd);
+    shutdown(sockfd, SHUT_RDWR);
+    printf("Closed socket connection!\n");
+
+    //----OPEN UDP CONNECTION-----
+    // Creating socket file descriptor
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+    {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&serv_addr, 0, sizeof(serv_addr));
+
+    // Filling server information
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(SERVER_PORT);    
+    serv_addr.sin_addr.s_addr = inet_addr(ip);
+
+    int n, len;
+
+    while (1)
+    {
+        char c;
+        printf("Enter [s] to send hello:");
+        scanf("%c", &c);
+      /*  if (c == 's')
+        {
+            sendto(sockfd, "Hello", 5,
+                   MSG_CONFIRM, (const struct sockaddr *)&serv_addr,
+                   sizeof(serv_addr));
+            printf("Hello message sent.\n");
+        } else if (c == 'q'){
+            break;
+        }
+		*/
         
-    int n, len;         
-    sendto(sockfd, "hello", 5, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr)); 
-    printf("Hello message sent.\n"); 
-*/
+    }
+    close(sockfd);
+    shutdown(sockfd, SHUT_RDWR);
+    return 0;
+}
 
+void sendFileToServer(char *filename, struct sockaddr_in s_addr, int connfd)
+{
+    printf("Connection accepted and id: %d\n", connfd);
+    printf("Connected to Server: %s:%d\n", inet_ntoa(s_addr.sin_addr), ntohs(s_addr.sin_port));
+    // write(connfd, fname,256);
 
-	while (1)
-	{
+    FILE *fp = fopen(filename, "r");
+    if (fp == NULL)
+    {
+        printf("Error: could not open config json");
+        return;
+    }
 
-		sleep(3);
-	}
-	close(sockfd);
-	exit(1);
+    /* Read data from file and send it */
+    while (1)
+    {
+        /* First read file in chunks of 256 bytes */
+        unsigned char buff[1024] = {0};
+        int bytesToRead = 1024;
+        int nread = fread(buff, 1, bytesToRead, fp);
+        // printf("Bytes read %d \n", nread);
 
-	// main loop
-	char buff[MAX];
-	int n;
-	for (;;)
-	{
-		// zero out the buffer
-		bzero(buff, sizeof(buff));
-		printf("Enter s to send messages");
-		n = 0;
-
-		// wait for the user input to send 2 messages - TESTING
-		char cmd;
-		scanf(" %c", &cmd);
-
-		if (cmd == 's')
-		{
-			printf("Sending two messages...\n");
-			strcpy(buff, "hello");
-			write(sockfd, buff, sizeof(buff));
-
-			sleep(1);
-
-			bzero(buff, sizeof(buff));
-			strcpy(buff, "hello2");
-			write(sockfd, buff, sizeof(buff));
-		}
-
-		/*bzero(buff, sizeof(buff));
-		read(sockfd, buff, sizeof(buff));
-		printf("From Server : %s", buff);
-		if ((strncmp(buff, "exit", 4)) == 0) {
-			printf("Client Exit...\n");
-			break;
-		}*/
-	}
-	// close the socket
-	close(sockfd);
+        /* If read was success, send data. */
+        if (nread > 0)
+        {
+            // printf("Sending \n");
+            write(connfd, buff, nread);
+        }
+        if (nread < 1024)
+        {
+            if (feof(fp))
+            {
+                printf("End of file\n");
+                printf("File transfer completed for id: %d\n", connfd);
+            }
+            if (ferror(fp))
+                printf("Error reading\n");
+            break;
+        }
+    }
 }

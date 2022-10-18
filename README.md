@@ -1,16 +1,11 @@
 # n_project_pt1
 
-Right now pre-probing was done and working but I was trying to re open the TCP connection and 
-moving stuff around so it broke. gonna work on it on monday and was starting UDP connection stuff
-Rn the Client was sending pre-seeded "config data," so I manually wrote it in there but it was 
-sending and the server was recieving the data just fine before it broke.
+## Right Now
+pre-probing is basically done. Config file is still being hard coded but we can figure that out a little later.
+RN the hard-coded config file is transferring from the client to the server all good and we are closing the connection
+successfully. There is a check in the server for incoming bytes which helps the server know when the client is done and has left.
 
-ALSO: client2.c is the original one started before client.c and server.c is the one I made
-
-TODO:
-fix bug
-write and import config
-create UDP packet
-establish UDP send/recieve to send UDP packet
-figure out compression
-Open TCP socket again to send compression results back
+## TODO
+probing phase -> UDP packets 
+    - rn I was working on the UDP packets being sent but am still in the middle of making it work correctly
+post-probing phase -> detecting compression

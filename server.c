@@ -1,176 +1,188 @@
-#include <stdio.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/types.h>
-#include <unistd.h> // read(), write(), close()
 
-#define MAX 80
-#define PORT 8080
-#define SA struct sockaddr
+#define MAX 1024
+#define SERVER_PORT 8756
 
-#define PORT_SOURCE 9876
-#define PORT_DEST 8756
-
-
-// Server Client connection opens, closes - then we open a second time and send the actual UDP packets
-//    /dev/urandom  file on CPU
-//  listen -
-
-int waitForConnection(int sockfd, struct sockaddr_in servaddr, struct sockaddr_in client, int *len)
+char fname[100];
+/*
+void* SendFileToClient(int *arg)
 {
-	// socket create and verification
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd == -1)
-	{
-		printf("socket creation failed...\n");
-		exit(0);
-	}
-	else
-		printf("Socket successfully created..\n");
-	bzero(&servaddr, sizeof(servaddr));
+      int connfd=(int)*arg;
+      printf("Connection accepted and id: %d\n",connfd);
+      printf("Connected to Clent: %s:%d\n",inet_ntoa(c_addr.sin_addr),ntohs(c_addr.sin_port));
+       write(connfd, fname,256);
 
-	// assign IP, PORT
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddr.sin_port = htons(PORT);
+        FILE *fp = fopen(fname,"rb");
+        if(fp==NULL)
+        {
+            printf("File opern error");
+            return 1;
+        }
 
-	int one = 1;
-	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-	while (1)
-	{
-		// Binding newly created socket to given IP and verification
-		if ((bind(sockfd, (SA *)&servaddr, sizeof(servaddr))) != 0)
-		{
-			printf("socket bind failed...\n");
-			usleep(500*1000);
-		}
-		else
-		{
-			printf("Socket successfully binded on port %d..\n", PORT);
-			break;
-		}
-	}
+        //Read data from file and send it
+        while(1)
+        {
+            //First read file in chunks of 256 bytes
+            unsigned char buff[1024]={0};
+            int nread = fread(buff,1,1024,fp);
+            //printf("Bytes read %d \n", nread);
 
-	// Now server is ready to listen and verification
-	if ((listen(sockfd, 5)) != 0)
-	{
-		printf("Listen failed...\n");
-		exit(0);
-	}
-	else
-		printf("Server listening..\n");
-	*len = sizeof(client);
+            // If read was success, send data.
+            if(nread > 0)
+            {
+                //printf("Sending \n");
+                write(connfd, buff, nread);
+            }
+            if (nread < 1024)
+            {
+                if (feof(fp))
+        {
+                    printf("End of file\n");
+            printf("File transfer completed for id: %d\n",connfd);
+        }
+                if (ferror(fp))
+                    printf("Error reading\n");
+                break;
+            }
+        }
+printf("Closing Connection for id: %d\n",connfd);
+close(connfd);
+shutdown(connfd,SHUT_WR);
+sleep(2);
+}*/
 
-	int isConnected = 0;
-	do
-	{
-		// Accept the data packet from client and verification
-		int connfd = accept(sockfd, (SA *)&client, len);
-		if (connfd < 0)
-		{
-			printf("server accept failed...\n");
-			usleep(500 * 1000); // wait 500ms to try again
-		}
-		else
-		{
-			printf("server accept the client...\n");
-			return connfd;
-		}
-	} while (isConnected == 0);
 
-	return -1;
-}
 
-int openUDPSocket(int sockfd, struct sockaddr_in servaddr, struct sockaddr_in client, int *len ){
-	// Creating socket file descriptor 
-    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
-        perror("socket creation failed"); 
-        exit(EXIT_FAILURE); 
-    } 
-        
-    memset(&servaddr, 0, sizeof(servaddr)); 
-    memset(&client, 0, sizeof(client)); 
-        
-    // Filling server information 
-    servaddr.sin_family    = AF_INET; // IPv4 
-    servaddr.sin_addr.s_addr = INADDR_ANY; 
-    servaddr.sin_port = htons(PORT); 
-        
-    // Bind the socket with the server address 
-    if ( bind(sockfd, (const struct sockaddr *)&servaddr,  
-            sizeof(servaddr)) < 0 ) 
-    { 
-        perror("bind failed"); 
-        exit(EXIT_FAILURE); 
-    } 
-    
-    *len = sizeof(client);  //len is value/result 
-}
-
-// Driver function
-int main()
+int main(int argc, char *argv[])
 {
-	int sockfd, connfd, len;
-	struct sockaddr_in servaddr, cli;
+    int connfd = 0, err;
+    struct sockaddr_in serv_addr, client_addr;
+    int listenfd = 0, ret;
+    char sendBuff[1025];
+    int numrv;
+    socklen_t clen = 0;
+    //----------OPEN THE SOCKET-------------
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (listenfd < 0)
+    {
+        printf("Error in socket creation\n");
+        exit(2);
+    }
 
-	connfd = waitForConnection(sockfd, servaddr, cli, &len);
-	int isConfigFinished = 0;
-	char buff[MAX];
+    printf("Socket retrieve success\n");
+
+    //----------BIND TO THE SOCKET-------------
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(SERVER_PORT);
+
+    ret = bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+    if (ret < 0)
+    {
+        printf("Error in bind\n");
+        exit(2);
+    }
+
+    //----------LISTEN TO THE SOCKET-------------
+    if (listen(listenfd, 5) == -1)
+    {
+        printf("Failed to listen\n");
+        return -1;
+    }
+
+    //----------WAIT FOR CLIENT CONNECTION-------------
+    while (1)
+    {
+        clen = sizeof(client_addr);
+        printf("Waiting...\n");
+        connfd = accept(listenfd, (struct sockaddr *)&client_addr, &clen);
+        if (connfd < 0)
+        {
+            printf("Error in accept\n");
+            continue;
+        } else {
+            break;
+        }
+       
+    }
+
+    //----------WAIT AND RECEIVE CONFIG FILE DATA-------------
+    int isConfigFinished = 0;
+    char buff[MAX];
 	do
 	{
 
 		bzero(buff, MAX);
 		// wait to read incoming msg
-		read(connfd, buff, sizeof(buff));
-		printf("From client: %s\n", buff);
-		if (strcmp(buff, "end") == 0)
-		{
-			isConfigFinished = 1;
-		}
+		int bytesRead = recv(connfd, buff, sizeof(buff),0);
+
+        if (bytesRead == -1){
+            printf("Socket open but no data was read\n");
+        } else if (bytesRead == 0){
+            printf("Socket connection was closed\n");
+            isConfigFinished = 1;
+        } else {
+            printf("From client: %s\n", buff);  
+            //TODO, add the most recent buffer information to the
+            //variable holding the config data          
+        }     
+		
+		
 		//
 	} while (isConfigFinished == 0);
 	printf("Loaded config\n");
-	close(connfd);
-	close(sockfd);
-	connfd = waitForConnection(sockfd, servaddr, cli, &len);
-
-	//open udp connection
-	
+    //close open connections
+    close(connfd);
+    shutdown(connfd, SHUT_RDWR);
 
 
-	printf("connected again\n");
-	exit(1);
-	/*
-		int n;
-		// infinite loop for chat
-		for (;;)
-		{
-			bzero(buff, MAX);
 
-			// read the message from client and copy it in buffer
-			read(connfd, buff, sizeof(buff));
-			// print buffer which contains the client contents
-			printf("From client: %s\t To client : ", buff);
-			bzero(buff, MAX);
-			n = 0;
-			// copy server message in the buffer
-			while ((buff[n++] = getchar()) != '\n')
-				;
+    int sockUDPfd;
 
-			// and send that buffer to client
-			// write(connfd, buff, sizeof(buff));
+    //----------OPEN UDP CONNECTION-------------
+    // Creating socket file descriptor 
+    if ( (sockUDPfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
+        perror("socket creation failed"); 
+        exit(EXIT_FAILURE); 
+    } 
+        
+    memset(&serv_addr, 0, sizeof(serv_addr)); 
+    memset(&client_addr, 0, sizeof(client_addr)); 
+        
+    // Filling server information 
+    serv_addr.sin_family    = AF_INET; // IPv4 
+    serv_addr.sin_addr.s_addr = INADDR_ANY; 
+    serv_addr.sin_port = htons(SERVER_PORT); 
+        
+    // Bind the socket with the server address 
+    if ( bind(sockUDPfd, (const struct sockaddr *)&serv_addr,  
+            sizeof(serv_addr)) < 0 ) 
+    { 
+        perror("bind failed"); 
+        exit(EXIT_FAILURE); 
+    } 
+        
+    int len, n; 
+    
+    len = sizeof(client_addr);  //len is value/result 
+    printf("Waiting for incoming UDP message");
+    n = recvfrom(sockUDPfd, buff, MAX,  
+                MSG_WAITALL, ( struct sockaddr *) &client_addr, 
+                &len); 
+    buff[n] = '\0'; 
+    printf("Client : %s\n", buff);
 
-			// if msg contains "Exit" then server exit and chat ended.
-			if (strncmp("exit", buff, 4) == 0)
-			{
-				printf("Server Exit...\n");
-				break;
-			}
-		}*/
-
-	// After chatting close the socket
-	close(sockfd);
+    close(sockUDPfd);
+    shutdown(sockUDPfd, SHUT_RDWR);
+    
+    
+    return 0;
 }

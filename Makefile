@@ -1,3 +1,5 @@
+PROG = client server
+all : $(PROGS)
 
 client: client.c 
 	gcc -g -o client client.c

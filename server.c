@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
+#include "JsonParse.h"
 
 #define MAX 1024
 #define SERVER_PORT 8756
@@ -116,13 +117,14 @@ int main(int argc, char *argv[])
 
     //----------WAIT AND RECEIVE CONFIG FILE DATA-------------
     int isConfigFinished = 0;
-    char buff[MAX];
+    char JSON_STRING[MAX], tempBuffer[MAX];
+    
 	do
 	{
 
-		bzero(buff, MAX);
+		bzero(tempBuffer, MAX);
 		// wait to read incoming msg
-		int bytesRead = recv(connfd, buff, sizeof(buff),0);
+		int bytesRead = recv(connfd, tempBuffer, sizeof(tempBuffer),0);
 
         if (bytesRead == -1){
             printf("Socket open but no data was read\n");
@@ -130,15 +132,18 @@ int main(int argc, char *argv[])
             printf("Socket connection was closed\n");
             isConfigFinished = 1;
         } else {
-            printf("From client: %s\n", buff);  
-            //TODO, add the most recent buffer information to the
-            //variable holding the config data          
+            //abc   to read this we would have read 3 bytes
+            //012
+            tempBuffer[bytesRead] = '\0';
+            strcpy(JSON_STRING,tempBuffer);                  
         }     
-		
-		
-		//
+
 	} while (isConfigFinished == 0);
-	printf("Loaded config\n");
+    //put the null terminating in the json string
+    
+    printf("From client:%s\n", JSON_STRING); 
+    config c;    
+    loadConfigStructFromConfigJSONString(JSON_STRING, &c);    	
     //close open connections
     close(connfd);
     shutdown(connfd, SHUT_RDWR);
@@ -171,14 +176,23 @@ int main(int argc, char *argv[])
     } 
         
     int len, n; 
-    
+    char buff[MAX];
     len = sizeof(client_addr);  //len is value/result 
     printf("Waiting for incoming UDP message");
-    n = recvfrom(sockUDPfd, buff, MAX,  
-                MSG_WAITALL, ( struct sockaddr *) &client_addr, 
-                &len); 
-    buff[n] = '\0'; 
-    printf("Client : %s\n", buff);
+
+    while(1){
+        n = recvfrom(sockUDPfd, buff, MAX,  
+                    MSG_WAITALL, ( struct sockaddr *) &client_addr, &len); 
+        buff[n] = '\0'; 
+        printf("Client : %s\n", buff);
+        //right now each message is only 2 bytes
+        int idByte2 = buff[0];
+        int idByte1 = buff[1];
+        //byte 2 needs to be shift by 8
+        idByte2 = idByte2 << 8;
+        int packetID = idByte2 + idByte1;
+        printf("PacketID: %d\n", packetID);
+    }
 
     close(sockUDPfd);
     shutdown(sockUDPfd, SHUT_RDWR);

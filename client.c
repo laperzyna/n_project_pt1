@@ -11,7 +11,6 @@
 #include "jsmn.h"
 #include "JsonParse.h"
 
-#define MSG_CONFIRM 0
 
 /*
 Client connects to server port, server listens to it's own port
@@ -47,6 +46,7 @@ void sendFileToServer(char *filename, struct sockaddr_in s_addr, int connfd);
 char *loadJSONConfigStringFromFile(char *filename);
 void sendJSONStringToServer(char *JSON_String, struct sockaddr_in s_addr, int connfd);
 void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend);
+void sendPacketTrainLow(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend);
 
 // TODO
 // make function for sending packet train, that takes in entropy bytes
@@ -126,11 +126,12 @@ int main(int argc, char *argv[])
         scanf("%c", &temp);
         if (temp == 's')
         {
-            /*sendto(sockfd, "Hello", 5,
-                   MSG_CONFIRM, (const struct sockaddr *)&serv_addr,
-                   sizeof(serv_addr));
-            printf("Hello message sent.\n");*/
-            sendPacketTrain(sockfd, c, &serv_addr, NULL);
+         //   sendto(sockfd, "Hello", 5,
+           //        MSG_CONFIRM, (const struct sockaddr *)&serv_addr,
+             //      sizeof(serv_addr));
+          //  printf("Hello message sent.\n");
+       //     sendPacketTrain(sockfd, c, &serv_addr, NULL); --Need to figure out how to send lowEntropy data
+			  sendPacketTrainLow(sockfd, c, &serv_addr, NULL);
         }
         else if (temp == 'q')
         {
@@ -142,6 +143,24 @@ int main(int argc, char *argv[])
     // we need to free the space allocated for the json string
     free(JSON_STRING);
     return 0;
+}
+
+void sendPacketTrainLow(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend){
+	int i = 1;
+	int n = 10;
+	char lowEntropy[n];
+
+	memset(lowEntropy, 0, n* sizeof(lowEntropy[0]));
+	while (i <= 6000){
+		sendto(sockfd, (const char *) lowEntropy, sizeof(lowEntropy), MSG_CONFIRM, (const struct sockaddr *) &servadd, sizeof(servadd));
+		if(i == 1){
+			printf("This is %d UPD packet\n", i);
+		}
+		if(i == 6000){
+			printf("This is %d UDP packet\n", i);
+		}
+		i++;
+	}
 }
 
 void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servaddr, char *dataToSend)

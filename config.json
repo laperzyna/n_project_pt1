@@ -1,11 +1,11 @@
 {
-    "serverIP": "127.0.0.1",
+    "IP": "127.0.0.1",
     "sourcePort" : 8756,
     "destPort" : 9876,
     "destPortTCPHead" : 9876,
     "destPortTCPTail" : 8756,
     "portTCP" : 9876,
-    "udpPayloadSize" : 1000,
+    "udpPayloadSize" : 10,
     "interMeasurementTime" : 15,
     "numUDPPackets" : 6000,
     "UDPPacketTTL" : 255

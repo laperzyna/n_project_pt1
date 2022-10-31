@@ -1,7 +1,4 @@
 
-
-// TODO header guards
-
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -10,7 +7,7 @@
 #define MAX_SIZE_CONFIG_STRING 15
 
 typedef struct config {
-    char serverIP[MAX_SIZE_CONFIG_STRING];
+    char IP[MAX_SIZE_CONFIG_STRING];
     int sourcePort;
     int destPort;
     int destPortTCPHead;
@@ -32,6 +29,14 @@ jsmn_parser p;
 // where t[0] holds where the key starts
 // and t[1] holds where the value starts
 jsmntok_t t[MAX_NUM_TOKENS]; /* We expect no more than 128 tokens */
+
+static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
+  if (tok->type == JSMN_STRING && (int)strlen(s) == tok->end - tok->start &&
+      strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
+    return 0;
+  }
+  return -1;
+}
 
 //This function takes in a "string" that holds JSON data
 //in the correct json format
@@ -67,6 +72,37 @@ int getIntFromJSON(char * json, int i)
     return atoi(saveString);
 }
 
+// this function takes all the information in the config file
+// and puts it into a char array
+char *loadJSONConfigStringFromFile(char *filename)
+{
+    FILE *fp = fopen(filename, "r");
+    if (fp == NULL)
+    {
+        printf("Error: could not open config json");
+        exit(1);
+    }
+
+    // we need to allocate enough space to save the JSON string in a
+    // char array
+    fseek(fp, 0, SEEK_END); // seek to end of file
+    int size = ftell(fp);   // get current file pointer
+    fseek(fp, 0, SEEK_SET); // seek back to beginning of file
+
+    char *jsonConfigString = (char *)malloc(sizeof(char) * (size + 1));
+    // while we're NOT at the end of the file
+    int idx = 0;
+    while (idx < size)
+    {
+        char c = fgetc(fp);
+        jsonConfigString[idx] = c;
+        idx++;
+    }
+    // put in the null terminating
+    jsonConfigString[idx] = '\0';
+    return jsonConfigString;
+}
+
 
 // this function will load the data from the config file
 // into the config structure
@@ -81,7 +117,7 @@ void loadConfigStructFromConfigJSONString(char *jsonConfigString, config *c)
      // the 1 at the end is for the first key in our json file
     // the 2 index is the value so all keys should be at
     // odd indexes
-    getStringFromJSON(jsonConfigString, c->serverIP, 1);
+    getStringFromJSON(jsonConfigString, c->IP, 1);
     c->sourcePort = getIntFromJSON(jsonConfigString, 3);
     c->destPort = getIntFromJSON(jsonConfigString, 5);
     c->destPortTCPHead = getIntFromJSON(jsonConfigString, 7);
@@ -92,8 +128,8 @@ void loadConfigStructFromConfigJSONString(char *jsonConfigString, config *c)
     c->numUDPPackets = getIntFromJSON(jsonConfigString, 17);
     c->UDPPacketTTL = getIntFromJSON(jsonConfigString, 19);
 
-    printf("Config:\n");
-    printf("IP: %s\n", c->serverIP);
+    /*printf("Config:\n");
+    printf("IP: %s\n", c->IP);
     printf("source port: %d\n", c->sourcePort);
     printf("dest port: %d\n", c->destPort);
     printf("dest port tcp head: %d\n", c->destPortTCPHead);
@@ -102,6 +138,6 @@ void loadConfigStructFromConfigJSONString(char *jsonConfigString, config *c)
     printf("udp payload: %d\n", c->udpPayloadSize);
     printf("interMeasurementTime: %d\n", c->interMeasurementTime);
     printf("numUDPPackets: %d\n", c->numUDPPackets);
-    printf("UDPPacketTTL: %d\n", c->UDPPacketTTL);
+    printf("UDPPacketTTL: %d\n", c->UDPPacketTTL);*/
 
 }

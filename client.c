@@ -11,6 +11,7 @@
 #include "jsmn.h"
 #include "JsonParse.h"
 
+#define MSG_CONFIRM 0
 
 /*
 Client connects to server port, server listens to it's own port
@@ -20,7 +21,10 @@ The server, accepts messages and listens for the connection to be dropped
 , that is what tells the server we have finished sending the config file
 
 TODO
-Client sends UDP packets, server receives
+-Use memcpy to read the random nums from High Entropy file. right now we only get 4 numbers then all zeros, but if
+we read from the file ourself with fgetc everything seems to work
+- Intermeasurement time is time in between low and high entropy trains
+-TTL is the time to live - value for period of time packet should exist on a computer before disregarded
 
 
 */
@@ -38,38 +42,54 @@ https://beej.us/guide/bgnet/html/#datagram
 
 The process to create a UDP packet for Part 1 is very similar to how
 it is presented here: Section 6.3, talker.c.
+
+JSON Parser Library
+https://github.com/zserge/jsmn
 */
 
-#define SERVER_PORT 8756
-
 void sendFileToServer(char *filename, struct sockaddr_in s_addr, int connfd);
-char *loadJSONConfigStringFromFile(char *filename);
 void sendJSONStringToServer(char *JSON_String, struct sockaddr_in s_addr, int connfd);
-void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend);
-void sendPacketTrainLow(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend);
+void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend, int numPacketsToSend);
 
-// TODO
-// make function for sending packet train, that takes in entropy bytes
-// on server side, for now just time the length that one train takes
-
+/* TODO
+ -make function for sending packet train, that takes in entropy bytes
+    on server side, for now just time the length that one train takes
+ -server side: create a timeout for receiving messages, if time since last message is over X, then the packet train may be done
+    -track missed packages by the package ID, whatever packet we get last is used for compression calc
+    -packet train is done, when timeout is reached or TCP connection is opened
+ -change the way the config file is read in, right now we assumed it
+ would always be complete and in the correct order so we used index numbers
+ to grab the config values, but we should really be trying to get the values
+ based on matching their key
+    Ex: we should iterate through the token array and check something like
+    if (t[i].label == "sourcePort"){
+        set the source port
+    }
+    *NOTE the if statement is wrong check the sample code for a json key equivalent function
+    that finds the matches of the key*
 // High Entropy
 // read the dev file, 1500-2000 bytes only once and use this
 // repeatedly for all programs
+*/
+
+config c;
 
 int main(int argc, char *argv[])
 {
 
     // Load config from file
     char *JSON_STRING = loadJSONConfigStringFromFile("config.json");
-    config c;
     loadConfigStructFromConfigJSONString(JSON_STRING, &c);
 
+    // system("clear");
     int sockfd = 0;
     int bytesReceived = 0;
     char recvBuff[1024];
     memset(recvBuff, '0', sizeof(recvBuff));
     struct sockaddr_in serv_addr;
 
+    // config c;
+    // loadConfigFromFile(&c)
     /* Create a socket first */
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
@@ -79,9 +99,9 @@ int main(int argc, char *argv[])
 
     /* Initialize sockaddr_in data structure */
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(c.sourcePort); // port
+    serv_addr.sin_port = htons(c.portTCP); // port
 
-    serv_addr.sin_addr.s_addr = inet_addr(c.serverIP);
+    serv_addr.sin_addr.s_addr = inet_addr(c.IP);
 
     /* Attempt a connection */
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
@@ -109,8 +129,8 @@ int main(int argc, char *argv[])
 
     // Filling server information
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(c.sourcePort);
-    serv_addr.sin_addr.s_addr = inet_addr(c.serverIP);
+    serv_addr.sin_port = htons(c.portTCP);
+    serv_addr.sin_addr.s_addr = inet_addr(c.IP);
 
     // TODO FINISH THIS
     //  set the dont fragment flag
@@ -119,6 +139,47 @@ int main(int argc, char *argv[])
 
     int n, len;
 
+    // prepare the UDP PAYLOAD options, we will add the ID's in front of this
+    // All 0s
+    unsigned char lowEntropy[c.udpPayloadSize];
+    // use memset to fill this array with 0's
+    // after the two ID bytes
+    memset(lowEntropy, 0, c.udpPayloadSize);
+
+    unsigned char highEntropy[c.udpPayloadSize];
+
+    // Open the file with random numbers for high entropy
+    FILE *fileRand = fopen("highEntropy", "r");
+    // check to make sure it is open, exit program if not
+    if (fileRand == NULL)
+    {
+        printf("Could not open the random file!\n");
+        exit(1);
+    }
+
+    /* memcpy(highEntropy, fileRand, c.udpPayloadSize);
+     for (size_t i = 0; i < c.udpPayloadSize; i++)
+     {
+         printf("%d ", (int) highEntropy[i]);
+     }
+     printf("\n");
+     exit(1);*/
+
+    // the first two bytes are the ID so place these characters
+    // start at index 2
+    // 168 100 151 99 236 70
+    for (int i = 0; i < c.udpPayloadSize; i++)
+    {
+        char curByte;
+        fscanf(fileRand, "%c", &curByte);
+        // printf("char %c   int:%d\n", curByte, (int)curByte);
+        // 0 to 999 i in for loop
+        // 2 to 1001 the index below
+        highEntropy[i] = curByte;
+        // printf("%d ", (int) highEntropy[i]);
+    }
+    // printf("\n");
+
     while (1)
     {
         char temp;
@@ -126,12 +187,12 @@ int main(int argc, char *argv[])
         scanf("%c", &temp);
         if (temp == 's')
         {
-         //   sendto(sockfd, "Hello", 5,
-           //        MSG_CONFIRM, (const struct sockaddr *)&serv_addr,
-             //      sizeof(serv_addr));
-          //  printf("Hello message sent.\n");
-       //     sendPacketTrain(sockfd, c, &serv_addr, NULL); --Need to figure out how to send lowEntropy data
-			  sendPacketTrainLow(sockfd, c, &serv_addr, NULL);
+            /*sendto(sockfd, "Hello", 5,
+                   MSG_CONFIRM, (const struct sockaddr *)&serv_addr,
+                   sizeof(serv_addr));
+            printf("Hello message sent.\n");*/
+            // send low entropy train
+            sendPacketTrain(sockfd, c, &serv_addr, highEntropy, 6000);
         }
         else if (temp == 'q')
         {
@@ -145,25 +206,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void sendPacketTrainLow(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend){
-	int i = 1;
-	int n = 10;
-	char lowEntropy[n];
-
-	memset(lowEntropy, 0, n* sizeof(lowEntropy[0]));
-	while (i <= 6000){
-		sendto(sockfd, (const char *) lowEntropy, sizeof(lowEntropy), MSG_CONFIRM, (const struct sockaddr *) &servadd, sizeof(servadd));
-		if(i == 1){
-			printf("This is %d UPD packet\n", i);
-		}
-		if(i == 6000){
-			printf("This is %d UDP packet\n", i);
-		}
-		i++;
-	}
-}
-
-void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servaddr, char *dataToSend)
+void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servaddr, char *dataToSend, int numPacketsToSend)
 {
 
     // int numBytesToSend = strlen(JSON_String);
@@ -183,32 +226,41 @@ void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servaddr, char *d
     // idbyte2 &  11111111 00000000
     // then bit shift to the right 8
 
-    //char can only hold 8 bits
-    //so and the number with 8 1's using the 0xFF
-    //and this gives us the right 8 bits
-    char idByteRight = c.numUDPPackets & 0xFF;
-    //Then we need the left 8 bits, so just shift the whole number
-    //right 8 bits and do the same and as above
-    char idByteLeft = (c.numUDPPackets >> 8); //& 0xFF;
+    // we need to send multiple messages for use a for loop
+    for (int packetID = 0; packetID < numPacketsToSend; packetID++)
+    {
 
-    // the size of the message is the number from the config
-    //+2 because we have a 2 byte packet id
-    char udpPacket[c.udpPayloadSize + 2];
-    udpPacket[0] = idByteLeft;
-    udpPacket[1] = idByteRight;
-    //dataToSend is either 0's or the random entropy data
-    //dataToSend is size 10
-    //copy the data into the udpPacket but dont go over
-    //the ID
-    strncpy(&udpPacket[2], dataToSend, c.udpPayloadSize);
-    
+        // char can only hold 8 bits
+        // so and the number with 8 1's using the 0xFF
+        // and this gives us the right 8 bits
+        unsigned char idByteRight = packetID & 0xFF;
+        // Then we need the left 8 bits, so just shift the whole number
+        // right 8 bits and do the same and as above
+        unsigned char idByteLeft = (packetID >> 8); //& 0xFF;
 
-    printf("byte2: %d  byte1: %d\n", (int)idByteLeft, (int)idByteRight);
-    // write(sockfd, test, 2);
-    // MSG_CONFIRM is included in <sys/socket.h>
-    sendto(sockfd, udpPacket, 2, MSG_CONFIRM,
-           (const struct sockaddr *)servaddr,
-           sizeof(*servaddr));
+        // the size of the message is the number from the config
+        //+2 because we have a 2 byte packet id
+        unsigned char udpPacket[c.udpPayloadSize + 2];
+        udpPacket[0] = idByteLeft;
+        udpPacket[1] = idByteRight;
+        // dataToSend is either 0's or the random entropy data
+        // dataToSend is size 10
+        // copy the data into the udpPacket but dont go over
+        // the ID
+        strncpy(&udpPacket[2], dataToSend, c.udpPayloadSize);
+       /* for (size_t i = 2; i < c.udpPayloadSize + 2; i++)
+        {
+            printf("%d ", (int)udpPacket[i]);
+        }
+        printf("\n");*/
+
+        printf("Sent packet %d\n", packetID);
+        // write(sockfd, test, 2);
+        // MSG_CONFIRM is included in <sys/socket.h>
+        sendto(sockfd, udpPacket, c.udpPayloadSize + 2, MSG_CONFIRM,
+               (const struct sockaddr *)servaddr,
+               sizeof(*servaddr));
+    }
 }
 
 void sendJSONStringToServer(char *JSON_String, struct sockaddr_in s_addr, int connfd)
@@ -225,40 +277,9 @@ void sendTCPMsg(int sockfd, char *msg)
 {
 
     int msgSize = sizeof(msg);
-    char buff[msgSize];
+    unsigned char buff[msgSize];
     strcpy(buff, msg);
     write(sockfd, buff, sizeof(buff));
-    printf("Sent %s on %d\n", buff, SERVER_PORT);
+    printf("Sent %s on %d\n", buff, c.portTCP);
     usleep(100 * 1000);
-}
-
-// this function takes all the information in the config file
-// and puts it into a char array
-char *loadJSONConfigStringFromFile(char *filename)
-{
-    FILE *fp = fopen(filename, "r");
-    if (fp == NULL)
-    {
-        printf("Error: could not open config json");
-        exit(1);
-    }
-
-    // we need to allocate enough space to save the JSON string in a
-    // char array
-    fseek(fp, 0, SEEK_END); // seek to end of file
-    int size = ftell(fp);   // get current file pointer
-    fseek(fp, 0, SEEK_SET); // seek back to beginning of file
-
-    char *jsonConfigString = (char *)malloc(sizeof(char) * (size + 1));
-    // while we're NOT at the end of the file
-    int idx = 0;
-    while (idx < size)
-    {
-        char c = fgetc(fp);
-        jsonConfigString[idx] = c;
-        idx++;
-    }
-    // put in the null terminating
-    jsonConfigString[idx] = '\0';
-    return jsonConfigString;
 }

@@ -11,7 +11,7 @@
 #include "jsmn.h"
 #include "JsonParse.h"
 
-#define MSG_CONFIRM 0
+#define MSG_CONFIRM  0
 
 /*
 Client connects to server port, server listens to it's own port
@@ -19,12 +19,6 @@ Once connected, client reads a file and sends 1024 byte packets
 to the server, then it closes the connection.
 The server, accepts messages and listens for the connection to be dropped
 , that is what tells the server we have finished sending the config file
-
-TODO
--Use memcpy to read the random nums from High Entropy file. right now we only get 4 numbers then all zeros, but if
-we read from the file ourself with fgetc everything seems to work
-- Intermeasurement time is time in between low and high entropy trains
--TTL is the time to live - value for period of time packet should exist on a computer before disregarded
 
 
 */
@@ -52,11 +46,6 @@ void sendJSONStringToServer(char *JSON_String, struct sockaddr_in s_addr, int co
 void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend, int numPacketsToSend);
 
 /* TODO
- -make function for sending packet train, that takes in entropy bytes
-    on server side, for now just time the length that one train takes
- -server side: create a timeout for receiving messages, if time since last message is over X, then the packet train may be done
-    -track missed packages by the package ID, whatever packet we get last is used for compression calc
-    -packet train is done, when timeout is reached or TCP connection is opened
  -change the way the config file is read in, right now we assumed it
  would always be complete and in the correct order so we used index numbers
  to grab the config values, but we should really be trying to get the values
@@ -67,30 +56,25 @@ void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servadd, char *da
     }
     *NOTE the if statement is wrong check the sample code for a json key equivalent function
     that finds the matches of the key*
-// High Entropy
-// read the dev file, 1500-2000 bytes only once and use this
-// repeatedly for all programs
+- Dont fragment flag 
+-TTL is the time to live - value for period of time packet should exist on a computer before disregarded
 */
 
+#define MAX_BUFFER_SIZE 1024
 config c;
 
 int main(int argc, char *argv[])
 {
 
-    // Load config from file
+    //----LOAD JSON CONFIG FROM FILE
     char *JSON_STRING = loadJSONConfigStringFromFile("config.json");
     loadConfigStructFromConfigJSONString(JSON_STRING, &c);
 
-    // system("clear");
-    int sockfd = 0;
-    int bytesReceived = 0;
-    char recvBuff[1024];
-    memset(recvBuff, '0', sizeof(recvBuff));
-    struct sockaddr_in serv_addr;
 
-    // config c;
-    // loadConfigFromFile(&c)
-    /* Create a socket first */
+    //-----OPEN TCP CONNECTION FOR SENDING SERVER FILE------
+    int sockfd = 0;    
+    struct sockaddr_in serv_addr;   
+
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("\n Error : Could not create socket \n");
@@ -100,14 +84,19 @@ int main(int argc, char *argv[])
     /* Initialize sockaddr_in data structure */
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(c.portTCP); // port
+    serv_addr.sin_addr.s_addr = inet_addr(c.IP);   
 
-    serv_addr.sin_addr.s_addr = inet_addr(c.IP);
-
-    /* Attempt a connection */
-    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-    {
-        printf("\n Error : Connect Failed \n");
-        return 1;
+    //the server may not be started so try this in a while loop
+    while (1){
+        /* Attempt a connection */
+        if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+        {
+            printf("Error : Connect Failed. Trying again in 1 second... \n");
+            sleep(1);
+        }  else {
+            printf("Connected to server!\n");
+            break;
+        }
     }
 
     printf("Connected to ip: %s : %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
@@ -117,7 +106,8 @@ int main(int argc, char *argv[])
     shutdown(sockfd, SHUT_RDWR);
     printf("Closed socket connection!\n");
 
-    //----OPEN UDP CONNECTION-----
+
+    //-------OPEN UDP CONNECTION-----
     // Creating socket file descriptor
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
@@ -125,20 +115,14 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    memset(&serv_addr, 0, sizeof(serv_addr));
-
-    // Filling server information
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(c.portTCP);
-    serv_addr.sin_addr.s_addr = inet_addr(c.IP);
+   
 
     // TODO FINISH THIS
     //  set the dont fragment flag
     //  int val = 1;
     //  setsockopt(sockfd, IPPROTO_IP, IP_DONTFRAG, &val, sizeof(val));
 
-    int n, len;
-
+    //--------PREPARE THE CHARCTER BUFFERS FOR LOW AND HIGH ENTROPY----------
     // prepare the UDP PAYLOAD options, we will add the ID's in front of this
     // All 0s
     unsigned char lowEntropy[c.udpPayloadSize];
@@ -157,14 +141,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    /* memcpy(highEntropy, fileRand, c.udpPayloadSize);
-     for (size_t i = 0; i < c.udpPayloadSize; i++)
-     {
-         printf("%d ", (int) highEntropy[i]);
-     }
-     printf("\n");
-     exit(1);*/
-
     // the first two bytes are the ID so place these characters
     // start at index 2
     // 168 100 151 99 236 70
@@ -180,27 +156,59 @@ int main(int argc, char *argv[])
     }
     // printf("\n");
 
-    while (1)
+
+    //-------SEND THE ENTROPY PACKET TRAINS
+    //send low entropy packet train
+    sendPacketTrain(sockfd, c, &serv_addr, lowEntropy, c.numUDPPackets);
+    //   
+    int timeLeft = c.interMeasurementTime;
+    while(timeLeft){
+        sleep(1);
+        timeLeft--;
+        printf("Waiting %d seconds to send second packet train...\n",timeLeft);
+        
+    }
+    sendPacketTrain(sockfd, c, &serv_addr, highEntropy, c.numUDPPackets);
+
+    //-----------CREATE TCP CONNECTION TO RECEIVE COMPRESSION RESULT------
+     /* Create a socket first */
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        char temp;
-        printf("Enter [s] to send hello:");
-        scanf("%c", &temp);
-        if (temp == 's')
+        printf("\n Error : Could not create socket \n");
+        return 1;
+    }
+
+    
+    //Connect to server with TCP
+    //the server may not be started so try this in a while loop
+    while (1){
+        /* Attempt a connection */
+        if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         {
-            /*sendto(sockfd, "Hello", 5,
-                   MSG_CONFIRM, (const struct sockaddr *)&serv_addr,
-                   sizeof(serv_addr));
-            printf("Hello message sent.\n");*/
-            // send low entropy train
-            sendPacketTrain(sockfd, c, &serv_addr, highEntropy, 6000);
-        }
-        else if (temp == 'q')
-        {
+            printf("Error : Connect Failed. Trying again in 1 second... \n");
+            sleep(1);
+        }  else {
+            printf("Connected to server!\n");
             break;
         }
     }
+
+    printf("Waiting for message from server....\n");
+    unsigned char recBuffer[MAX_BUFFER_SIZE];
+    memset(recBuffer,0,MAX_BUFFER_SIZE);
+    int numBytesRead;
+    
+    do{
+        numBytesRead = recv(sockfd, recBuffer, sizeof(recBuffer), 0);
+        recBuffer[numBytesRead] = '\0';
+        //XXX
+        //0123
+    } while(numBytesRead <= 0);
+    printf("Recieved from server: %s\n", recBuffer);
+
     close(sockfd);
     shutdown(sockfd, SHUT_RDWR);
+    printf("Shutting down...\n");
     // we need to free the space allocated for the json string
     free(JSON_STRING);
     return 0;

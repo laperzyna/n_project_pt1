@@ -1,11 +1,14 @@
 # n_project_pt1
 
-## Right Now
-pre-probing is basically done. Config file is still being hard coded but we can figure that out a little later.
-RN the hard-coded config file is transferring from the client to the server all good and we are closing the connection
-successfully. There is a check in the server for incoming bytes which helps the server know when the client is done and has left.
+## Part 1
+### Right Now
+part 1 is pretty much done. There is something weird with our compression but gonna ask about that. 
 
-## TODO
-probing phase -> UDP packets 
-    - rn I was working on the UDP packets being sent but am still in the middle of making it work correctly
-post-probing phase -> detecting compression
+### TODO
+Fix the JSON parse so that we read in the file correctly if its out of order versus assuming that its always giving everything and in order.
+Also set the Don't Fragment Flag
+Fix the compression if its wrong
+
+## Part 2
+### Right Now
+figure out what's going on lol!

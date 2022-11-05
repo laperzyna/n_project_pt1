@@ -22,7 +22,6 @@ long long millis()
 }
 
 #define MAX 1024
-#define MAX_PACKETS_IN_TRAIN 10000
 #define TIMEOUT 1000
 #define COMPRESSIOIN_THRESHOLD 100
 
@@ -33,7 +32,10 @@ TODO
 
 long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
 {
-    long long packetTimes[MAX_PACKETS_IN_TRAIN]; // make the a variable at the top but what is MAX num packets in train?
+    //TODO - make this array automatically expand and double it's size when
+    //it is 75% full
+    int arraySize = 1000;
+    long long * packetTimes = malloc( sizeof(long long) * arraySize); // make the a variable at the top but what is MAX num packets in train?
     unsigned char buff[MAX];
     int len = sizeof(client_addr);
     int msgCo = 0;
@@ -49,6 +51,28 @@ long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
 
         if (numBytesRead != -1)
         {
+            //packetTimes = {2,3,4,_,_,_}
+            //newArray
+
+            //if we are about to insert we should check to see if we need more space in 
+            //our packet array
+            //if our array is 75% full (or more)
+            if (msgCo / (double)arraySize >= 0.75){
+                //allocate a new array that is double the current size
+                long long * newArray = malloc(sizeof(long long) * (arraySize*2));
+                //copy all of the old data into the new array 
+                for(int i = 0; i < msgCo;i++){
+                    newArray[i] = packetTimes[i];
+                }
+                //now all the old values are in the new array so
+                free(packetTimes);
+                //the old pointer has to point to the new array we allocated
+                packetTimes = newArray;
+                //array size needs to update
+                arraySize = arraySize * 2;
+                
+            }
+
             // packetTimes[] = { time1, time2, time3}     msgCo is 3
             //                     0     1       2
             packetTimes[msgCo] = millis();
@@ -122,9 +146,18 @@ long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
 
 int main(int argc, char *argv[])
 {
+    //argc - argument count is the number of arguments that come in 
+    if (argc < 2){
+        //argc is the number of arguments, and the program is the first argument so less than 
+        //2 means we dont have a config file name
+        printf("Missing input argument - please put the name of the config file after the program name\n");
+        exit(EXIT_FAILURE);
+    }
 
-    char *JSON_STRING = loadJSONConfigStringFromFile("config.json");
+
+    char *JSON_STRING = loadJSONConfigStringFromFile(argv[1]);
     config c;
+    initializeConfig(&c);
     loadConfigStructFromConfigJSONString(JSON_STRING, &c);
 
     int connfd = 0, err;
@@ -138,7 +171,7 @@ int main(int argc, char *argv[])
     if (sockTCP < 0)
     {
         printf("Error in socket creation\n");
-        exit(2);
+        exit(-1);
     }
 
     printf("Socket retrieve success\n");
@@ -152,7 +185,7 @@ int main(int argc, char *argv[])
     if (ret < 0)
     {
         printf("Error in bind\n");
-        exit(2);
+        exit(-1);
     }
 
     //----------LISTEN TO THE SOCKET-------------
@@ -349,6 +382,7 @@ int main(int argc, char *argv[])
     shutdown(sockTCP, SHUT_RDWR);
     close(sockUDPfd);
     shutdown(sockUDPfd, SHUT_RDWR);
+    clearJsonMemory(JSON_STRING);
 
     return 0;
 }

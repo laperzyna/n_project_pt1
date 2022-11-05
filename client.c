@@ -1,6 +1,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,9 +12,10 @@
 #include "jsmn.h"
 #include "JsonParse.h"
 
-#define MSG_CONFIRM  0
-
 /*
+
+Due Nov 22nd 
+
 Client connects to server port, server listens to it's own port
 Once connected, client reads a file and sends 1024 byte packets
 to the server, then it closes the connection.
@@ -46,17 +48,6 @@ void sendJSONStringToServer(char *JSON_String, struct sockaddr_in s_addr, int co
 void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend, int numPacketsToSend);
 
 /* TODO
- -change the way the config file is read in, right now we assumed it
- would always be complete and in the correct order so we used index numbers
- to grab the config values, but we should really be trying to get the values
- based on matching their key
-    Ex: we should iterate through the token array and check something like
-    if (t[i].label == "sourcePort"){
-        set the source port
-    }
-    *NOTE the if statement is wrong check the sample code for a json key equivalent function
-    that finds the matches of the key*
-- Dont fragment flag 
 -TTL is the time to live - value for period of time packet should exist on a computer before disregarded
 */
 
@@ -65,11 +56,24 @@ config c;
 
 int main(int argc, char *argv[])
 {
+    //client2  nameOfFile.json
+    // 0            1
 
-    //----LOAD JSON CONFIG FROM FILE
-    char *JSON_STRING = loadJSONConfigStringFromFile("config.json");
+    //argc - argument count is the number of arguments that come in 
+    if (argc < 2){
+        //argc is the number of arguments, and the program is the first argument so less than 
+        //2 means we dont have a config file name
+        printf("Missing input argument - please put the name of the config file after the program name\n");
+        exit(EXIT_FAILURE);
+    }
+
+    //----LOAD JSON CONFIG FROM FILE   
+    initializeConfig(&c);
+    //loadJSON allocates memory for the json string to live based on the file length
+    //so we need to free the JSON_STRING at the end of this program
+    char *JSON_STRING = loadJSONConfigStringFromFile(argv[1]);
     loadConfigStructFromConfigJSONString(JSON_STRING, &c);
-
+    
 
     //-----OPEN TCP CONNECTION FOR SENDING SERVER FILE------
     int sockfd = 0;    
@@ -78,7 +82,7 @@ int main(int argc, char *argv[])
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("\n Error : Could not create socket \n");
-        return 1;
+        exit(-1);
     }
 
     /* Initialize sockaddr_in data structure */
@@ -117,10 +121,9 @@ int main(int argc, char *argv[])
 
    
 
-    // TODO FINISH THIS
     //  set the dont fragment flag
-    //  int val = 1;
-    //  setsockopt(sockfd, IPPROTO_IP, IP_DONTFRAG, &val, sizeof(val));
+    int val = 1;
+    setsockopt(sockfd, IPPROTO_IP, IP_DF, &val, sizeof(val));
 
     //--------PREPARE THE CHARCTER BUFFERS FOR LOW AND HIGH ENTROPY----------
     // prepare the UDP PAYLOAD options, we will add the ID's in front of this
@@ -210,7 +213,7 @@ int main(int argc, char *argv[])
     shutdown(sockfd, SHUT_RDWR);
     printf("Shutting down...\n");
     // we need to free the space allocated for the json string
-    free(JSON_STRING);
+    clearJsonMemory(JSON_STRING);
     return 0;
 }
 

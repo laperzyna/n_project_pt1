@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
 
     //  set the dont fragment flag
     int val = 1;
-    setsockopt(sockfd, IPPROTO_IP, IP_DF, &val, sizeof(val));
+    setsockopt(sockfd, IPPROTO_IP, IP_DONTFRAG, &val, sizeof(val));
 
     //--------PREPARE THE CHARCTER BUFFERS FOR LOW AND HIGH ENTROPY----------
     // prepare the UDP PAYLOAD options, we will add the ID's in front of this

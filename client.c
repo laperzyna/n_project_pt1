@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
     //  set the dont fragment flag
 
     int val = IP_PMTUDISC_DO;
-    if (setsockopt(sockUDP, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val)) < 0)
+    if (setsockopt(sockfd, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val)) < 0)
     {
         printf("Could not set sockopt for DONT FRAGMENT FLAG\n");
         // exit(1);

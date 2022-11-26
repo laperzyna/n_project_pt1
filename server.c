@@ -25,10 +25,6 @@ long long millis()
 #define TIMEOUT 1000
 #define COMPRESSIOIN_THRESHOLD 100
 
-/*
-TODO
-
-*/
 
 long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
 {
@@ -47,7 +43,6 @@ long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
                                     MSG_WAITALL, (struct sockaddr *)&client_addr,
                                     &len);
         // get the time
-        // printf("N is %d\n", n);
 
         if (numBytesRead != -1)
         {
@@ -109,15 +104,6 @@ long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
             }
             // printf("\n");
             // check if this was low entropy or not
-            if (isLowEntropy == 1)
-            {
-                // start timer
-                // printf("GOT LOW ENTROPY\n");
-            }
-            else
-            {
-                // printf("GOT HIGH ENTROPY\n");
-            }
         }
         else
         {

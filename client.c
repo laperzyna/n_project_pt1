@@ -14,7 +14,7 @@
 
 /*
 
-Due Nov 22nd 
+Due Nov 22nd
 
 Client connects to server port, server listens to it's own port
 Once connected, client reads a file and sends 1024 byte packets
@@ -56,28 +56,28 @@ config c;
 
 int main(int argc, char *argv[])
 {
-    //client2  nameOfFile.json
-    // 0            1
+    // client2  nameOfFile.json
+    //  0            1
 
-    //argc - argument count is the number of arguments that come in 
-    if (argc < 2){
-        //argc is the number of arguments, and the program is the first argument so less than 
-        //2 means we dont have a config file name
+    // argc - argument count is the number of arguments that come in
+    if (argc < 2)
+    {
+        // argc is the number of arguments, and the program is the first argument so less than
+        // 2 means we dont have a config file name
         printf("Missing input argument - please put the name of the config file after the program name\n");
         exit(EXIT_FAILURE);
     }
 
-    //----LOAD JSON CONFIG FROM FILE   
+    //----LOAD JSON CONFIG FROM FILE
     initializeConfig(&c);
-    //loadJSON allocates memory for the json string to live based on the file length
-    //so we need to free the JSON_STRING at the end of this program
+    // loadJSON allocates memory for the json string to live based on the file length
+    // so we need to free the JSON_STRING at the end of this program
     char *JSON_STRING = loadJSONConfigStringFromFile(argv[1]);
     loadConfigStructFromConfigJSONString(JSON_STRING, &c);
-    
 
     //-----OPEN TCP CONNECTION FOR SENDING SERVER FILE------
-    int sockfd = 0;    
-    struct sockaddr_in serv_addr;   
+    int sockfd = 0;
+    struct sockaddr_in serv_addr;
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
@@ -88,16 +88,19 @@ int main(int argc, char *argv[])
     /* Initialize sockaddr_in data structure */
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(c.portTCP); // port
-    serv_addr.sin_addr.s_addr = inet_addr(c.IP);   
+    serv_addr.sin_addr.s_addr = inet_addr(c.IP);
 
-    //the server may not be started so try this in a while loop
-    while (1){
+    // the server may not be started so try this in a while loop
+    while (1)
+    {
         /* Attempt a connection */
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         {
             printf("Error : Connect Failed. Trying again in 1 second... \n");
             sleep(1);
-        }  else {
+        }
+        else
+        {
             printf("Connected to server!\n");
             break;
         }
@@ -110,7 +113,6 @@ int main(int argc, char *argv[])
     shutdown(sockfd, SHUT_RDWR);
     printf("Closed socket connection!\n");
 
-
     //-------OPEN UDP CONNECTION-----
     // Creating socket file descriptor
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -119,11 +121,13 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-   
-
     //  set the dont fragment flag
-    int val = 1;
-    setsockopt(sockfd, IPPROTO_IP, IP_DF, &val, sizeof(val));
+    int val = IP_PMTUDISC_DO;
+    if (setsockopt(sockUDP, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val)) < 0)
+    {
+        printf("Could not set sockopt for DONT FRAGMENT FLAG\n");
+        // exit(1);
+    };
 
     //--------PREPARE THE CHARCTER BUFFERS FOR LOW AND HIGH ENTROPY----------
     // prepare the UDP PAYLOAD options, we will add the ID's in front of this
@@ -159,38 +163,39 @@ int main(int argc, char *argv[])
     }
     // printf("\n");
 
-
     //-------SEND THE ENTROPY PACKET TRAINS
-    //send low entropy packet train
+    // send low entropy packet train
     sendPacketTrain(sockfd, c, &serv_addr, lowEntropy, c.numUDPPackets);
-    //   
+    //
     int timeLeft = c.interMeasurementTime;
-    while(timeLeft){
+    while (timeLeft)
+    {
         sleep(1);
         timeLeft--;
-        printf("Waiting %d seconds to send second packet train...\n",timeLeft);
-        
+        printf("Waiting %d seconds to send second packet train...\n", timeLeft);
     }
     sendPacketTrain(sockfd, c, &serv_addr, highEntropy, c.numUDPPackets);
 
     //-----------CREATE TCP CONNECTION TO RECEIVE COMPRESSION RESULT------
-     /* Create a socket first */
+    /* Create a socket first */
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("\n Error : Could not create socket \n");
         return 1;
     }
 
-    
-    //Connect to server with TCP
-    //the server may not be started so try this in a while loop
-    while (1){
+    // Connect to server with TCP
+    // the server may not be started so try this in a while loop
+    while (1)
+    {
         /* Attempt a connection */
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         {
             printf("Error : Connect Failed. Trying again in 1 second... \n");
             sleep(1);
-        }  else {
+        }
+        else
+        {
             printf("Connected to server!\n");
             break;
         }
@@ -198,15 +203,16 @@ int main(int argc, char *argv[])
 
     printf("Waiting for message from server....\n");
     unsigned char recBuffer[MAX_BUFFER_SIZE];
-    memset(recBuffer,0,MAX_BUFFER_SIZE);
+    memset(recBuffer, 0, MAX_BUFFER_SIZE);
     int numBytesRead;
-    
-    do{
+
+    do
+    {
         numBytesRead = recv(sockfd, recBuffer, sizeof(recBuffer), 0);
         recBuffer[numBytesRead] = '\0';
-        //XXX
-        //0123
-    } while(numBytesRead <= 0);
+        // XXX
+        // 0123
+    } while (numBytesRead <= 0);
     printf("Recieved from server: %s\n", recBuffer);
 
     close(sockfd);
@@ -259,11 +265,11 @@ void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servaddr, char *d
         // copy the data into the udpPacket but dont go over
         // the ID
         strncpy(&udpPacket[2], dataToSend, c.udpPayloadSize);
-       /* for (size_t i = 2; i < c.udpPayloadSize + 2; i++)
-        {
-            printf("%d ", (int)udpPacket[i]);
-        }
-        printf("\n");*/
+        /* for (size_t i = 2; i < c.udpPayloadSize + 2; i++)
+         {
+             printf("%d ", (int)udpPacket[i]);
+         }
+         printf("\n");*/
 
         printf("Sent packet %d\n", packetID);
         // write(sockfd, test, 2);

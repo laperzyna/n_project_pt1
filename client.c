@@ -122,17 +122,13 @@ int main(int argc, char *argv[])
     }
 
     //  set the dont fragment flag
-<<<<<<< HEAD
+
     int val = IP_PMTUDISC_DO;
     if (setsockopt(sockUDP, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val)) < 0)
     {
         printf("Could not set sockopt for DONT FRAGMENT FLAG\n");
         // exit(1);
     };
-=======
-    int val = 1;
-    setsockopt(sockfd, IPPROTO_IP, IP_DONTFRAG, &val, sizeof(val));
->>>>>>> 3db6ca8728c9546cfeb28dd5dc9acbecdcf061e1
 
     //--------PREPARE THE CHARCTER BUFFERS FOR LOW AND HIGH ENTROPY----------
     // prepare the UDP PAYLOAD options, we will add the ID's in front of this

@@ -12,52 +12,22 @@
 #include "jsmn.h"
 #include "JsonParse.h"
 
-/*
-
-Due Nov 22nd
-
-Client connects to server port, server listens to it's own port
-Once connected, client reads a file and sends 1024 byte packets
-to the server, then it closes the connection.
-The server, accepts messages and listens for the connection to be dropped
-, that is what tells the server we have finished sending the config file
 
 
-*/
 
-/*UDP Packet
-
-https://docs.oracle.com/cd/E36784_01/html/E36875/setsockopt-3socket.html
-Prof:
-
-For Part 1 you don't need to create any packets manually.
-For set Don't Fragment flag, you can use setsockopt(),
-provided in the project resources:
-
-https://beej.us/guide/bgnet/html/#datagram
-
-The process to create a UDP packet for Part 1 is very similar to how
-it is presented here: Section 6.3, talker.c.
-
-JSON Parser Library
-https://github.com/zserge/jsmn
-*/
 
 void sendFileToServer(char *filename, struct sockaddr_in s_addr, int connfd);
 void sendJSONStringToServer(char *JSON_String, struct sockaddr_in s_addr, int connfd);
 void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servadd, char *dataToSend, int numPacketsToSend);
 
-/* TODO
--TTL is the time to live - value for period of time packet should exist on a computer before disregarded
-*/
+
 
 #define MAX_BUFFER_SIZE 1024
 config c;
 
 int main(int argc, char *argv[])
 {
-    // client2  nameOfFile.json
-    //  0            1
+
 
     // argc - argument count is the number of arguments that come in
     if (argc < 2)
@@ -151,18 +121,13 @@ int main(int argc, char *argv[])
 
     // the first two bytes are the ID so place these characters
     // start at index 2
-    // 168 100 151 99 236 70
+
     for (int i = 0; i < c.udpPayloadSize; i++)
     {
         char curByte;
         fscanf(fileRand, "%c", &curByte);
-        // printf("char %c   int:%d\n", curByte, (int)curByte);
-        // 0 to 999 i in for loop
-        // 2 to 1001 the index below
         highEntropy[i] = curByte;
-        // printf("%d ", (int) highEntropy[i]);
     }
-    // printf("\n");
 
     //-------SEND THE ENTROPY PACKET TRAINS
     // send low entropy packet train
@@ -211,8 +176,7 @@ int main(int argc, char *argv[])
     {
         numBytesRead = recv(sockfd, recBuffer, sizeof(recBuffer), 0);
         recBuffer[numBytesRead] = '\0';
-        // XXX
-        // 0123
+
     } while (numBytesRead <= 0);
     printf("Recieved from server: %s\n", recBuffer);
 
@@ -266,14 +230,8 @@ void sendPacketTrain(int sockfd, config c, struct sockaddr_in *servaddr, char *d
         // copy the data into the udpPacket but dont go over
         // the ID
         strncpy(&udpPacket[2], dataToSend, c.udpPayloadSize);
-        /* for (size_t i = 2; i < c.udpPayloadSize + 2; i++)
-         {
-             printf("%d ", (int)udpPacket[i]);
-         }
-         printf("\n");*/
 
         printf("Sent packet %d\n", packetID);
-        // write(sockfd, test, 2);
         // MSG_CONFIRM is included in <sys/socket.h>
         sendto(sockfd, udpPacket, c.udpPayloadSize + 2, MSG_CONFIRM,
                (const struct sockaddr *)servaddr,
@@ -285,7 +243,6 @@ void sendJSONStringToServer(char *JSON_String, struct sockaddr_in s_addr, int co
 {
     printf("Connection accepted and id: %d\n", connfd);
     printf("Connected to Server: %s:%d\n", inet_ntoa(s_addr.sin_addr), ntohs(s_addr.sin_port));
-    // write(connfd, fname,256);
 
     int numBytesToSend = strlen(JSON_String);
     write(connfd, JSON_String, numBytesToSend);

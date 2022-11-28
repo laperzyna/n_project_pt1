@@ -17,7 +17,6 @@ long long millis()
     gettimeofday(&te, NULL); // get current time
     // this structure also has nano seconds if we need it  te.tv_nsec
     long long milliseconds = te.tv_sec * 1000LL + te.tv_usec / 1000; // calculate milliseconds
-    // printf("milliseconds: %lld\n", milliseconds);
     return milliseconds;
 }
 
@@ -28,10 +27,9 @@ long long millis()
 
 long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
 {
-    //TODO - make this array automatically expand and double it's size when
-    //it is 75% full
+
     int arraySize = 1000;
-    long long * packetTimes = malloc( sizeof(long long) * arraySize); // make the a variable at the top but what is MAX num packets in train?
+    long long * packetTimes = malloc( sizeof(long long) * arraySize); 
     unsigned char buff[MAX];
     int len = sizeof(client_addr);
     int msgCo = 0;
@@ -42,13 +40,9 @@ long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
         int numBytesRead = recvfrom(sockUDPfd, buff, MAX,
                                     MSG_WAITALL, (struct sockaddr *)&client_addr,
                                     &len);
-        // get the time
 
         if (numBytesRead != -1)
         {
-            //packetTimes = {2,3,4,_,_,_}
-            //newArray
-
             //if we are about to insert we should check to see if we need more space in 
             //our packet array
             //if our array is 75% full (or more)
@@ -68,23 +62,17 @@ long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
                 
             }
 
-            // packetTimes[] = { time1, time2, time3}     msgCo is 3
-            //                     0     1       2
             packetTimes[msgCo] = millis();
             msgCo++;
 
             // write down the time of this message
             lastMsgRecTime = millis();
 
-            // buff[n] = '\0';
-            // printf("Received %d bytes from Client : %s\n", n, buff);
-            // right now each message is only 2 bytes
             int idByte2 = buff[0];
             int idByte1 = buff[1];
             // byte 2 needs to be shift by 8
             idByte2 = idByte2 << 8;
             int packetID = idByte2 + idByte1;
-            // printf("PacketID: %d\n", packetID);
             // need to check the data for low or high entropy
             // the logic is easier if we assume it is low entropy
             // and flip that assumption when we get a NON ZERO VALUE
@@ -100,10 +88,7 @@ long long waitForPacketTrain(int sockUDPfd, struct sockaddr_in client_addr)
                     isLowEntropy = 0;
                     break; // no need to check anymore
                 }
-                // printf("%d ", (int) buff[i]);
             }
-            // printf("\n");
-            // check if this was low entropy or not
         }
         else
         {
@@ -220,8 +205,6 @@ int main(int argc, char *argv[])
         }
         else
         {
-            // abc   to read this we would have read 3 bytes
-            // 012
             tempBuffer[bytesRead] = '\0';
             strcpy(JSON_STRING_REC, tempBuffer);
         }
@@ -249,7 +232,6 @@ int main(int argc, char *argv[])
 
     // set this socket to NON BLOCKING, so that we don't get stuck waiting for messages
     // this is necesary to detect a timeout
-    // O_NONBLOCK
     struct timeval read_timeout;
     read_timeout.tv_sec = 0;
     // set the timeout to 100 microseconds, if the socket doesnt have information it returns -1
@@ -279,17 +261,10 @@ int main(int argc, char *argv[])
     int numPacketsReceived_low = 0;
     int numPacketsReceived_high = 0;
 
-    // set alarm for timeout
-    // https://man7.org/linux/man-pages/man2/alarm.2.html
-
-    // TODO we are assuming that the client will always send the low entropy first
     long long lowEntropyTime = waitForPacketTrain(sockUDPfd, client_addr);
     printf("Waiting for the second packet train....\n");
     long long highEntropyTime = waitForPacketTrain(sockUDPfd, client_addr);
 
-    //TODO sometimes the lowEntropyTime is higher than highEntropy which tries to give a negative number
-    //but long long cant hold a negative so it wraps around and gives a HUGE number which is ALWAYS greater than the
-    //threshold so lets say if we get a negative from this math that we fix it to zero
     long long timeDifference = highEntropyTime - lowEntropyTime;
     //set the time difference and then check to see if it might be wrong
     //because lowEntropyTime was greater than high
@@ -303,8 +278,6 @@ int main(int argc, char *argv[])
     printf("Time Difference:  %llu\n", timeDifference);
 
     char sendMsgToClient[MAX];
-    //when using the COMPRESSION_THRESHOLD macro above this if statement was false when the statement was
-    // if (12308781234 > 100) so we tried to compare 2 longs incase it was a variable type issue
     if (timeDifference > 100LL)
     {
         strcpy(sendMsgToClient, "Compression Detected!");
